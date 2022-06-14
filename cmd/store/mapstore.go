@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/pararti/forump/internals/entity"
 )
@@ -61,6 +62,8 @@ func (u *UserStore) Delete(id uint32) {
 //methods of post sore
 func (p *PostStore) Add(post *entity.Post) uint32 {
 	post.Id = p.nextId
+	post.Time = time.Now().Format("2 Jan 2006 в 15:04")
+	post.Anons = post.Data[0:150] + "..."
 	p.storeg[post.Id] = post
 	p.nextId += 1
 	return p.nextId - 1

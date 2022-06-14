@@ -11,11 +11,12 @@ type User struct {
 }
 
 type Post struct {
-	Id    uint32    `json:"id"`
-	Owner uint32    `json:"owner"`
-	Title string    `json:"title"`
-	Time  time.Time `json:"time"`
-	Data  string    `json:"data"`
+	Id    uint32 `json:"id"`
+	Owner uint32 `json:"owner"`
+	Title string `json:"title"`
+	Time  string `json:"time"`
+	Anons string `json:"anons"`
+	Data  string `json:"data"`
 }
 
 type Comment struct {

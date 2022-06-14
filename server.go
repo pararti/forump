@@ -55,7 +55,7 @@ func (s *serverForum) deletePostAPI(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"Id": id})
 }
 
-func (s *serverForum) ViewAll(ctx *gin.Context) {
+func (s *serverForum) viewAll(ctx *gin.Context) {
 	posts := s.store.P.GetAll()
 	ctx.HTML(http.StatusOK, "index", gin.H{
 		"title": "Posts",
@@ -64,12 +64,33 @@ func (s *serverForum) ViewAll(ctx *gin.Context) {
 
 }
 
+func (s *serverForum) createPost(ctx *gin.Context) {
+	ctx.HTML(http.StatusOK, "creater", gin.H{
+		"title": "Create post",
+	})
+}
+
+func (s *serverForum) savePost(ctx *gin.Context) {
+	title := ctx.PostForm("title")
+	data := ctx.PostForm("data")
+	post := &entity.Post{
+		Title: title,
+		Data:  data,
+	}
+	s.store.P.Add(post)
+	ctx.Redirect(http.StatusSeeOther, "/")
+
+}
+
 func main() {
 	server := NewServer()
 	router := gin.Default()
 	router.LoadHTMLGlob("ui/html/*")
 	router.Static("/css", "ui/css")
-	router.GET("/", server.ViewAll)
+	router.Static("/img", "ui/img")
+	router.GET("/", server.viewAll)
+	router.GET("/create/", server.createPost)
+	router.POST("/save_post/", server.savePost)
 	routerAPI := router.Group("/api")
 	{
 		routerAPI.GET("/posts/:id", server.getPostAPI)
