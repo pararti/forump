@@ -13,6 +13,7 @@ type User struct {
 type Post struct {
 	Id    uint32 `json:"id"`
 	Owner uint32 `json:"owner"`
+	URL   string `json:"url"`
 	Title string `json:"title"`
 	Time  string `json:"time"`
 	Anons string `json:"anons"`

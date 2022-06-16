@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"strconv"
 	"sync"
 	"time"
 
@@ -62,8 +63,13 @@ func (u *UserStore) Delete(id uint32) {
 //methods of post sore
 func (p *PostStore) Add(post *entity.Post) uint32 {
 	post.Id = p.nextId
+	post.URL = "/post/" + strconv.FormatUint(uint64(post.Id), 10)
 	post.Time = time.Now().Format("2 Jan 2006 в 15:04")
-	post.Anons = post.Data[0:150] + "..."
+	if len(post.Data) > 140 {
+		post.Anons = post.Data[0:139] + "..."
+	} else {
+		post.Anons = post.Data
+	}
 	p.storeg[post.Id] = post
 	p.nextId += 1
 	return p.nextId - 1
