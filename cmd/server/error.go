@@ -6,18 +6,18 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func ErrorHandler(code int, err string) gin.HandlerFunc {
+func ErrorHandler(code int, err, url, urlhandler string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		ctx.JSON(code, gin.H{"error": err})
 		ctx.HTML(http.StatusOK, "error", gin.H{
-			"Error": err,
+			"Error":      err,
+			"URL":        url,
+			"URLHandler": urlhandler,
 		})
 	}
 }
 
 func SuccessHandler(suc string) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		ctx.JSON(http.StatusOK, gin.H{"success": suc})
 		ctx.HTML(http.StatusOK, "success", gin.H{
 			"Success": suc,
 		})

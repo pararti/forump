@@ -3,7 +3,6 @@ package server
 import (
 	"crypto/sha256"
 	_ "errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -47,6 +46,9 @@ func (s *serverForum) GetAuthSignUpPage(ctx *gin.Context) {
 }
 
 func (s *serverForum) GetAuthSignInPage(ctx *gin.Context) {
+	ctx.HTML(http.StatusOK, "signin", gin.H{
+		"Title": "sign in",
+	})
 
 }
 
@@ -66,12 +68,29 @@ func (s *serverForum) SignUp(ctx *gin.Context) {
 			Email:    email,
 			Password: passwd,
 		}
-		id := s.store.U.Add(user)
-		ctx.JSON(http.StatusOK, gin.H{"id": id})
-		f := SuccessHandler("Вы успешно зарегистрировались!")
+		s.store.U.Add(user)
+		f := SuccessHandler("Регистрация прошла успешно!")
 		f(ctx)
 	} else {
-		f := ErrorHandler(http.StatusConflict, "Пользователь с текущим email уже существует!")
+		f := ErrorHandler(http.StatusConflict, "Пользователь уже существует!", "/auth/signin/", "Войти")
 		f(ctx)
+	}
+}
+
+func (s *serverForum) SignIn(ctx *gin.Context) {
+	email := ctx.PostForm("email")
+	user, err := s.store.U.GetByEmail(email)
+	if err != nil {
+		f := ErrorHandler(http.StatusNotFound, "Пользователь не найден", "/auth/signup/", "Регистрация")
+		f(ctx)
+	} else {
+		passwd := hashPasswd(ctx.PostForm("password"))
+		if passwd == user.Password {
+			f := SuccessHandler("Добро пожаловать!")
+			f(ctx)
+		} else {
+			f := ErrorHandler(http.StatusNotFound, "Данные введены неверно!", "/auth/signin/", "Попробовать снова")
+			f(ctx)
+		}
 	}
 }

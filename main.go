@@ -16,8 +16,10 @@ func main() {
 	router.GET("/create/", s.CreatePost)
 	router.POST("/save_post/", s.SavePost)
 	router.GET("/post/:id", s.ViewPost)
-	router.GET("/auth/", s.GetAuthSignUpPage)
-	router.POST("/auth/signup/", s.SignUp)
+	router.GET("/auth/signup", s.GetAuthSignUpPage)
+	router.POST("/auth/signup", s.SignUp)
+	router.GET("/auth/signin", s.GetAuthSignInPage)
+	router.POST("/auth/signin", s.SignIn)
 	routerAPI := router.Group("/api")
 	{
 		routerAPI.GET("/posts/:id", s.GetPostAPI)
