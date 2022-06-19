@@ -65,7 +65,8 @@ func (s *serverForum) SavePost(ctx *gin.Context) {
 		Title: title,
 		Data:  data,
 	}
-	s.store.P.Add(post)
+	id := s.store.P.Add(post)
+	ctx.JSON(http.StatusOK, gin.H{"id": id})
 	ctx.Redirect(http.StatusSeeOther, "/")
 
 }

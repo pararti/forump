@@ -1,13 +1,12 @@
 // user
 package entity
 
-import (
-	"time"
-)
-
 type User struct {
-	Id   uint32 `json:"id"`
-	Name string `json:"name"`
+	Id       uint32 `json:"id"`
+	Name     string `json:"name"`
+	Token    string `json:"token,omitempty"`
+	Email    string `json:"email"`
+	Password string `json:"password,omitempty"`
 }
 
 type Post struct {
@@ -21,12 +20,12 @@ type Post struct {
 }
 
 type Comment struct {
-	Id     uint32    `json:"id"`
-	PostId uint32    `json:"postid"`
-	Owner  uint32    `json:"owner"`
-	Name   string    `json:"name"`
-	Time   time.Time `json:"time"`
-	Data   string    `json:"data"`
+	Id     uint32 `json:"id"`
+	PostId uint32 `json:"postid"`
+	Owner  uint32 `json:"owner"`
+	Name   string `json:"name"`
+	Time   string `json:"time"`
+	Data   string `json:"data"`
 }
 
 //methods of user

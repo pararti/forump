@@ -23,7 +23,7 @@ type CommentStore struct {
 
 type UserStore struct {
 	m      sync.Mutex
-	storeg map[uint32]*entity.User
+	storeg map[string]*entity.User
 	nextId uint32
 }
 
@@ -35,19 +35,21 @@ type CommonStore struct {
 
 func New() *CommonStore {
 	return &CommonStore{
-		U: UserStore{storeg: make(map[uint32]*entity.User)},
+		U: UserStore{storeg: make(map[string]*entity.User)},
 		P: PostStore{storeg: make(map[uint32]*entity.Post)},
 		C: CommentStore{storeg: make(map[uint32]*entity.Comment)},
 	}
 }
 
-//methods of user store
-func (u *UserStore) Create(name string) uint32 {
-	u.storeg[u.nextId] = &entity.User{Id: u.nextId, Name: name}
+//methods for user store
+func (u *UserStore) Add(user *entity.User) uint32 {
+	u.storeg[user.Email] = user
+	user.Id = u.nextId
 	u.nextId += 1
 	return u.nextId - 1
 }
 
+/*
 func (u *UserStore) Get(id uint32) (*entity.User, error) {
 	res, ok := u.storeg[id]
 	if ok {
@@ -55,9 +57,18 @@ func (u *UserStore) Get(id uint32) (*entity.User, error) {
 	}
 	return &entity.User{}, errors.New("Not found")
 }
+*/
 
-func (u *UserStore) Delete(id uint32) {
-	delete(u.storeg, id)
+func (u *UserStore) GetByEmail(email string) (*entity.User, error) {
+	user, ok := u.storeg[email]
+	if ok {
+		return user, nil
+	}
+	return &entity.User{}, errors.New("Not found")
+}
+
+func (u *UserStore) Delete(email string) {
+	delete(u.storeg, email)
 }
 
 //methods of post sore
