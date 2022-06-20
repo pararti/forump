@@ -2,11 +2,11 @@
 package entity
 
 type User struct {
-	Id       uint32 `json:"id"`
-	Name     string `json:"name"`
-	Token    string `json:"token,omitempty"`
-	Email    string `json:"email"`
-	Password string `json:"password,omitempty"`
+	Id           uint32 `json:"id"`
+	Name         string `json:"name"`
+	RefreshToken string `json:"token,omitempty"`
+	Email        string `json:"email"`
+	Password     string `json:"password,omitempty"`
 }
 
 type Post struct {
@@ -26,6 +26,12 @@ type Comment struct {
 	Name   string `json:"name"`
 	Time   string `json:"time"`
 	Data   string `json:"data"`
+}
+
+type Token struct {
+	Token  string `json:"token"`
+	UserId uint32 `json:"userid"`
+	Time   int64  `json:"time"`
 }
 
 //methods of user

@@ -27,10 +27,16 @@ type UserStore struct {
 	nextId uint32
 }
 
+type TokenStore struct {
+	m      sync.Mutex
+	storeg map[string]*entity.Token
+}
+
 type CommonStore struct {
 	U UserStore
 	P PostStore
 	C CommentStore
+	T TokenStore
 }
 
 func New() *CommonStore {
@@ -38,6 +44,7 @@ func New() *CommonStore {
 		U: UserStore{storeg: make(map[string]*entity.User)},
 		P: PostStore{storeg: make(map[uint32]*entity.Post)},
 		C: CommentStore{storeg: make(map[uint32]*entity.Comment)},
+		T: TokenStore{storeg: make(map[string]*entity.Token)},
 	}
 }
 
@@ -125,4 +132,34 @@ func (c *CommentStore) Get(id uint32) (*entity.Comment, error) {
 
 func (c *CommentStore) Delete(id uint32) {
 	delete(c.storeg, id)
+}
+
+func (t *TokenStore) Add(token string, uid uint32) {
+	newToken := &entity.Token{
+		Token:  token,
+		UserId: id,
+		Time:   time.Now().Add(24 * 30 * time.Hour).Unix(),
+	}
+	t.storeg[token] = newToken
+}
+
+func (t *TokenStore) Delete(token string) {
+	delete(t.storeg, token)
+}
+
+func (t *TokenStore) Get(token string) (*entity.Token, error) {
+	tk, ok := t.storeg[token]
+	if ok {
+		return tk, nil
+	}
+	return *entity.Token{}, errors.New("Not found")
+}
+
+func (t *TokenStore) Check(token string) bool {
+	if tk, ok := t.storeg[token]; ok {
+		if tk.Time > time.Now().Unix() {
+			return true
+		}
+	}
+	return false
 }
