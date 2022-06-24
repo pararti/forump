@@ -1,15 +1,16 @@
 package server
 
 import (
-	"github.com/pararti/forump/cmd/store"
+	"github.com/pararti/forump/cmd/store/postgres"
+	"github.com/pararti/forump/internals/entity"
 )
 
-type serverForum struct {
-	store *store.CommonStore
+type ServerForum struct {
+	store *store.DataBase
 }
 
-func NewServer() *serverForum {
-	return &serverForum{
-		store: store.New(),
+func NewServer(config *entity.PSQLConfig) *ServerForum {
+	return &ServerForum{
+		store: store.NewDB(config),
 	}
 }

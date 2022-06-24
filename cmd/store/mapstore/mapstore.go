@@ -137,7 +137,7 @@ func (c *CommentStore) Delete(id uint32) {
 func (t *TokenStore) Add(token string, uid uint32) {
 	newToken := &entity.Token{
 		Token:  token,
-		UserId: id,
+		UserId: uid,
 		Time:   time.Now().Add(24 * 30 * time.Hour).Unix(),
 	}
 	t.storeg[token] = newToken
@@ -152,7 +152,7 @@ func (t *TokenStore) Get(token string) (*entity.Token, error) {
 	if ok {
 		return tk, nil
 	}
-	return *entity.Token{}, errors.New("Not found")
+	return &entity.Token{}, errors.New("Not found")
 }
 
 func (t *TokenStore) Check(token string) bool {

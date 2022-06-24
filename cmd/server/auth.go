@@ -2,14 +2,14 @@ package server
 
 import (
 	"crypto/sha256"
-	_ "errors"
-	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
 	"github.com/pararti/forump/internals/entity"
+	"github.com/pararti/forump/pkg/random"
 )
 
 const (
@@ -25,11 +25,6 @@ const (
 	ttl       = 12 * 60 * 60
 )
 
-type tokenClaims struct {
-	jwt.StandardClaims
-	id uint32 `json:"id"`
-}
-
 func hashPasswd(password string) string {
 	hash := sha256.New()
 	hash.Write([]byte(password))
@@ -37,26 +32,20 @@ func hashPasswd(password string) string {
 }
 
 func generateRefrashToken() (string, error) {
-	b := make([]byte, 256)
-	r := rand.New(rand.NewSource(time.Now().Unix()))
-	if _, err := r.Read(b); err != nil {
-		return "", err
-	}
-	return string(b), nil
+	s := random.RandomString(64)
+	return s, nil
 }
 
 func generateAccessToken(id uint32) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.StandardClaims{
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(ttl * time.Second).Unix(),
-			Id:        id,
-			IssuedAt:  time.Now().Unix(),
-		},
+		ExpiresAt: time.Now().Add(ttl * time.Second).Unix(),
+		Id:        strconv.FormatUint(uint64(id), 10),
+		IssuedAt:  time.Now().Unix(),
 	})
 	return token.SignedString([]byte(secretKey))
 }
 
-func Refreshing(id uint32) (string, string, error) {
+func GetRefreshToken(id uint32) (string, string, error) {
 	refresh, err := generateRefrashToken()
 	if err != nil {
 		return "", "", err
@@ -68,20 +57,71 @@ func Refreshing(id uint32) (string, string, error) {
 	return access, refresh, nil
 }
 
+func (s *ServerForum) Refreshing(ctx *gin.Context) error {
+	accessToken, _ := ctx.Request.Cookie("access_token")
+	refreshToken, _ := ctx.Request.Cookie("refresh_token")
+	id, err := ParseToken(accessToken.Value)
+	if err != nil {
+		return err
+	}
+	a, r, err := GetRefreshToken(id)
+	if err != nil {
+		return err
+	}
+	SetCookieAuth(a, r, ctx)
+	s.store.AddToken(r, id)
+	s.store.T.Delete(refreshToken.Value)
+	return nil
+}
+
 func SetCookieAuth(access, refresh string, ctx *gin.Context) {
-	ctx.SetCookie("access_token", access, ttl, "/", false, true)
-	ctx.SetCookie("refresh_token", refresh, ttl, "/", false, true)
+	ctx.SetCookie("access_token", access, ttl, "/", "localhost", false, true)
+	ctx.SetCookie("refresh_token", refresh, 60*60*24*30, "/", "localhost", false, true)
 
 }
 
-//func SwitcherCookieStatus(status int)
+func (s *ServerForum) SwitcherCookieStatus(status int, ctx *gin.Context) (bool, error) {
+	switch status {
+	case COOKIE_NOT_FOUND:
+		f := ErrorHandler(http.StatusUnauthorized, "Пожалуйста зарегистрируйтесь", "/auth/signup", "Регистрация")
+		f(ctx)
+		return false, nil
+	case COOKIE_NEED_REFRESH:
+		err := s.Refreshing(ctx)
+		if err != nil {
+			return false, err
+		}
+	case COOKIE_NEED_AUTH:
+		f := ErrorHandler(http.StatusUnauthorized, "Пожалуйста войдите", "/auth/signin", "Войти")
+		f(ctx)
+		return false, nil
+	case COOKIE_IS_OK:
+		return true, nil
+	}
+	return true, nil
+}
 
-func (s *serverForum) CheckCookie(ctx *gin.Context) int {
+func ParseToken(access string) (uint32, error) {
+	token, err := jwt.ParseWithClaims(access, &jwt.StandardClaims{}, func(token *jwt.Token) (interface{}, error) {
+		return []byte(secretKey), nil
+	})
+
+	if claims, ok := token.Claims.(*jwt.StandardClaims); ok && token.Valid {
+		id, err := strconv.ParseUint(claims.Id, 10, 32)
+		if err != nil {
+			return 0, err
+		}
+		return uint32(id), nil
+	}
+	return 0, err
+}
+
+func (s *ServerForum) CheckCookie(ctx *gin.Context) int {
 	cookie, err := ctx.Request.Cookie("access_token")
 	if err != nil {
 		return COOKIE_NOT_FOUND
 	}
-	if cookie.MaxAge < int(time.Now().Unix()-time.Now().Add(-1*cookie.MaxAge).Unix()) {
+	if cookie.MaxAge < int(time.Now().Unix()-time.Now().Add(-1*time.Duration(cookie.MaxAge)*time.Second).Unix()) {
 		return COOKIE_NEED_REFRESH
 	}
 	cookie2, err := ctx.Request.Cookie("refresh_token")
@@ -95,22 +135,66 @@ func (s *serverForum) CheckCookie(ctx *gin.Context) int {
 	return COOKIE_IS_OK
 }
 
-func (s *serverForum) GetAuthSignUpPage(ctx *gin.Context) {
-
+func (s *ServerForum) GetAuthSignUpPage(ctx *gin.Context) {
+	stat := s.CheckCookie(ctx)
+	if stat == COOKIE_NEED_REFRESH {
+		err := s.Refreshing(ctx)
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		stat = COOKIE_IS_OK
+	}
+	if stat == COOKIE_IS_OK {
+		f := SuccessHandler("Вы уже авторизированы")
+		f(ctx)
+		return
+	}
+	if stat == COOKIE_NEED_AUTH {
+		f := ErrorHandler(http.StatusUnauthorized, "Пожалуйста войдите", "/auth/signin", "Войти")
+		f(ctx)
+		return
+	}
 	ctx.HTML(http.StatusOK, "signup", gin.H{
 		"Title": "Registration",
 	})
 
 }
 
-func (s *serverForum) GetAuthSignInPage(ctx *gin.Context) {
+func (s *ServerForum) GetAuthSignInPage(ctx *gin.Context) {
+	stat := s.CheckCookie(ctx)
+	if stat == COOKIE_NEED_REFRESH {
+		err := s.Refreshing(ctx)
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		stat = COOKIE_IS_OK
+	}
+	if stat == COOKIE_IS_OK {
+		f := SuccessHandler("Вы уже авторизированы")
+		f(ctx)
+		return
+	}
+	if stat == COOKIE_NOT_FOUND {
+		f := ErrorHandler(http.StatusUnauthorized, "Пожалуйста авторизируйтесь", "/auth/signup", "Регистрация")
+		f(ctx)
+		return
+	}
 	ctx.HTML(http.StatusOK, "signin", gin.H{
 		"Title": "sign in",
 	})
 
 }
 
-func (s *serverForum) SignUp(ctx *gin.Context) {
+func (s *ServerForum) SignUp(ctx *gin.Context) {
+	/*stat := s.CheckCookie(ctx)
+	if stat != COOKIE_NOT_FOUND {
+		f := SuccessHandler("Вы уже авторизированы")
+		f(ctx)
+		return
+	}
+	*/
 	name := ctx.PostForm("name")
 	email := ctx.PostForm("email")
 	passwd := hashPasswd(ctx.PostForm("password"))
@@ -121,10 +205,10 @@ func (s *serverForum) SignUp(ctx *gin.Context) {
 			ctx.String(http.StatusInternalServerError, err.Error())
 		}
 		user := &entity.User{
-			Name:              name,
-			RefreshTokenToken: refreshToken,
-			Email:             email,
-			Password:          passwd,
+			Name:         name,
+			RefreshToken: refreshToken,
+			Email:        email,
+			Password:     passwd,
 		}
 		id := s.store.U.Add(user)
 		s.store.T.Add(refreshToken, id)
@@ -141,7 +225,14 @@ func (s *serverForum) SignUp(ctx *gin.Context) {
 	}
 }
 
-func (s *serverForum) SignIn(ctx *gin.Context) {
+func (s *ServerForum) SignIn(ctx *gin.Context) {
+	/*stat := s.CheckCookie(ctx)
+	if stat != COOKIE_NOT_FOUND || stat != COOKIE_NEED_AUTH {
+		f := SuccessHandler("Вы уже авторизированы")
+		f(ctx)
+		return
+	}
+	*/
 	email := ctx.PostForm("email")
 	user, err := s.store.U.GetByEmail(email)
 	if err != nil {

@@ -8,13 +8,13 @@ import (
 	"github.com/pararti/forump/internals/entity"
 )
 
-func (s *serverForum) GetPostAPI(ctx *gin.Context) {
+func (s *ServerForum) GetPostAPI(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Params.ByName("id"), 10, 32)
 	if err != nil {
 		ctx.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	post, err := s.store.P.Get(uint32(id))
+	post, err := s.store.GetPostByID(uint32(id))
 	if err != nil {
 		ctx.String(http.StatusBadRequest, err.Error())
 		return
@@ -22,29 +22,41 @@ func (s *serverForum) GetPostAPI(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, post)
 }
 
-func (s *serverForum) CreatePostAPI(ctx *gin.Context) {
+func (s *ServerForum) CreatePostAPI(ctx *gin.Context) {
 	post := &entity.Post{}
 	if err := ctx.ShouldBindJSON(post); err != nil {
 		ctx.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	id := s.store.P.Add(post)
+	id, err := s.store.AddPost(post)
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
 	ctx.JSON(http.StatusOK, gin.H{"Id": id})
 }
 
-func (s *serverForum) DeletePostAPI(ctx *gin.Context) {
+func (s *ServerForum) DeletePostAPI(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Params.ByName("id"), 10, 32)
 	if err != nil {
 		ctx.String(http.StatusBadRequest, err.Error())
 		return
 	}
 
-	s.store.P.Delete(uint32(id))
+	err := s.store.DeletePost(uint32(id))
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
 	ctx.JSON(http.StatusOK, gin.H{"Id": id})
 }
 
-func (s *serverForum) ViewAll(ctx *gin.Context) {
-	posts := s.store.P.GetAll()
+func (s *ServerForum) ViewAll(ctx *gin.Context) {
+	posts, err := s.store.GetAllPost()
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
 	ctx.HTML(http.StatusOK, "index", gin.H{
 		"Title": "Posts",
 		"posts": posts,
@@ -52,32 +64,49 @@ func (s *serverForum) ViewAll(ctx *gin.Context) {
 
 }
 
-func (s *serverForum) CreatePost(ctx *gin.Context) {
+func (s *ServerForum) CreatePost(ctx *gin.Context) {
+	ok, err := s.SwitcherCookieStatus(s.CheckCookie(ctx), ctx)
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ok {
+		return
+	}
 	ctx.HTML(http.StatusOK, "creater", gin.H{
 		"Title": "Create post",
 	})
 }
 
-func (s *serverForum) SavePost(ctx *gin.Context) {
+func (s *ServerForum) SavePost(ctx *gin.Context) {
 	title := ctx.PostForm("title")
 	data := ctx.PostForm("data")
+	accessToken, err := ctx.Request.Cookie("access_token").Value
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	id, err := ParseToken(accessToken)
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
 	post := &entity.Post{
+		Owner: id,
 		Title: title,
 		Data:  data,
 	}
-	id := s.store.P.Add(post)
-	ctx.JSON(http.StatusOK, gin.H{"id": id})
+	_, err := s.store.AddPost(post)
 	ctx.Redirect(http.StatusSeeOther, "/")
-
 }
 
-func (s *serverForum) ViewPost(ctx *gin.Context) {
+func (s *ServerForum) ViewPost(ctx *gin.Context) {
 	id, err := strconv.ParseUint(ctx.Params.ByName("id"), 10, 32)
 	if err != nil {
 		ctx.String(http.StatusBadRequest, err.Error())
 		return
 	}
-	post, err := s.store.P.Get(uint32(id))
+	post, err := s.store.GetPostByID(uint32(id))
 	if err != nil {
 		ctx.String(http.StatusBadRequest, err.Error())
 		return
