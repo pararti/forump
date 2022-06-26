@@ -1,12 +1,20 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pararti/forump/cmd/server"
+	"github.com/pararti/forump/internals/entity"
 )
 
 func main() {
-	s := server.NewServer()
+
+	s, err := server.NewServer(entity.DefaultPSQLConfig())
+	if err != nil {
+		fmt.Println(err.Error())
+		return
+	}
 	router := gin.Default()
 	router.LoadHTMLGlob("ui/html/*")
 	router.Static("./css", "ui/css")

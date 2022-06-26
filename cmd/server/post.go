@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -43,7 +44,7 @@ func (s *ServerForum) DeletePostAPI(ctx *gin.Context) {
 		return
 	}
 
-	err := s.store.DeletePost(uint32(id))
+	err = s.store.DeletePost(uint32(id))
 	if err != nil {
 		ctx.String(http.StatusInternalServerError, err.Error())
 		return
@@ -81,22 +82,28 @@ func (s *ServerForum) CreatePost(ctx *gin.Context) {
 func (s *ServerForum) SavePost(ctx *gin.Context) {
 	title := ctx.PostForm("title")
 	data := ctx.PostForm("data")
-	accessToken, err := ctx.Request.Cookie("access_token").Value
+	accessToken, err := ctx.Request.Cookie("access_token")
 	if err != nil {
 		ctx.String(http.StatusInternalServerError, err.Error())
 		return
 	}
-	id, err := ParseToken(accessToken)
+	id, err := ParseToken(accessToken.Value)
 	if err != nil {
 		ctx.String(http.StatusInternalServerError, err.Error())
 		return
 	}
+	fmt.Println("id:", id)
+
 	post := &entity.Post{
 		Owner: id,
 		Title: title,
 		Data:  data,
 	}
-	_, err := s.store.AddPost(post)
+	_, err = s.store.AddPost(post)
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
 	ctx.Redirect(http.StatusSeeOther, "/")
 }
 

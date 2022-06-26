@@ -1,7 +1,7 @@
 package server
 
 import (
-	"crypto/sha256"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pararti/forump/internals/entity"
 	"github.com/pararti/forump/pkg/random"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -20,15 +21,17 @@ const (
 )
 
 const (
-	salt      = "hjkoiopoemohparartisalt32g" //change this values if u will use that code
+	//change this values if u will use that code
 	secretKey = "ajfnjnivmdo4jmfsmcsm2miemfsmvkbotlsoewjfjvmxmnmi8mamiemfmaadfvmiw"
 	ttl       = 12 * 60 * 60
 )
 
-func hashPasswd(password string) string {
-	hash := sha256.New()
-	hash.Write([]byte(password))
-	return string(hash.Sum([]byte(salt)))
+func hashPasswd(password string) (string, error) {
+	result, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(result), nil
 }
 
 func generateRefrashToken() (string, error) {
@@ -59,7 +62,7 @@ func GetRefreshToken(id uint32) (string, string, error) {
 
 func (s *ServerForum) Refreshing(ctx *gin.Context) error {
 	accessToken, _ := ctx.Request.Cookie("access_token")
-	refreshToken, _ := ctx.Request.Cookie("refresh_token")
+	//refreshToken, _ := ctx.Request.Cookie("refresh_token")
 	id, err := ParseToken(accessToken.Value)
 	if err != nil {
 		return err
@@ -69,8 +72,10 @@ func (s *ServerForum) Refreshing(ctx *gin.Context) error {
 		return err
 	}
 	SetCookieAuth(a, r, ctx)
-	s.store.AddToken(r, id)
-	s.store.T.Delete(refreshToken.Value)
+	err = s.store.UpdateToken(a, id)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -128,8 +133,8 @@ func (s *ServerForum) CheckCookie(ctx *gin.Context) int {
 	if err != nil {
 		return COOKIE_NOT_FOUND
 	}
-	ok := s.store.T.Check(cookie2.Value)
-	if !ok {
+
+	if cookie2.MaxAge < int(time.Now().Unix()-time.Now().Add(-1*time.Duration(cookie2.MaxAge)*time.Second).Unix()) {
 		return COOKIE_NEED_AUTH
 	}
 	return COOKIE_IS_OK
@@ -197,24 +202,43 @@ func (s *ServerForum) SignUp(ctx *gin.Context) {
 	*/
 	name := ctx.PostForm("name")
 	email := ctx.PostForm("email")
-	passwd := hashPasswd(ctx.PostForm("password"))
-	_, err := s.store.U.GetByEmail(email)
+	passwd, err := hashPasswd(ctx.PostForm("password"))
 	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+	}
+	fmt.Println("email, name, passwd", email, name, passwd)
+	b, err := s.store.CheckUserByEmail(email)
+	if err != nil {
+		ctx.String(http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !b {
 		refreshToken, err := generateRefrashToken()
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
+			return
 		}
+		s.store.AddToken(refreshToken, 0)
 		user := &entity.User{
 			Name:         name,
 			RefreshToken: refreshToken,
 			Email:        email,
 			Password:     passwd,
 		}
-		id := s.store.U.Add(user)
-		s.store.T.Add(refreshToken, id)
+		id, err := s.store.AddUser(user)
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
+		err = s.store.SetTokenUserID(refreshToken, id)
+		if err != nil {
+			ctx.String(http.StatusInternalServerError, err.Error())
+			return
+		}
 		accessToken, err := generateAccessToken(id)
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
+			return
 		}
 		SetCookieAuth(accessToken, refreshToken, ctx)
 		f := SuccessHandler("Регистрация прошла успешно!")
@@ -226,21 +250,16 @@ func (s *ServerForum) SignUp(ctx *gin.Context) {
 }
 
 func (s *ServerForum) SignIn(ctx *gin.Context) {
-	/*stat := s.CheckCookie(ctx)
-	if stat != COOKIE_NOT_FOUND || stat != COOKIE_NEED_AUTH {
-		f := SuccessHandler("Вы уже авторизированы")
-		f(ctx)
-		return
-	}
-	*/
 	email := ctx.PostForm("email")
-	user, err := s.store.U.GetByEmail(email)
+	password, err := s.store.GetUserPasswordByEmail(email)
 	if err != nil {
 		f := ErrorHandler(http.StatusNotFound, "Пользователь не найден", "/auth/signup/", "Регистрация")
 		f(ctx)
+		return
 	} else {
-		passwd := hashPasswd(ctx.PostForm("password"))
-		if passwd == user.Password {
+		passwd := ctx.PostForm("password")
+		err := bcrypt.CompareHashAndPassword([]byte(password), []byte(passwd))
+		if err == nil {
 			f := SuccessHandler("Добро пожаловать!")
 			f(ctx)
 		} else {

@@ -2,9 +2,10 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"time"
 
-	"github.com/lib/pq"
+	_ "github.com/lib/pq"
 	"github.com/pararti/forump/internals/entity"
 	"github.com/pararti/forump/internals/query"
 )
@@ -24,8 +25,11 @@ func NewDB(config *entity.PSQLConfig) (*DataBase, error) {
 		return nil, err
 	}
 	d := &DataBase{DB: db}
-
-	err := d.CreateTable()
+	_, err = d.DB.Exec(`SET client_encoding TO 'utf8'`)
+	if err != nil {
+		return nil, err
+	}
+	err = d.CreateTable()
 	if err != nil {
 		return nil, err
 	}
@@ -34,11 +38,11 @@ func NewDB(config *entity.PSQLConfig) (*DataBase, error) {
 }
 
 func (d *DataBase) CreateTable() error {
-	_, err := d.DB.Exec(query.CreateUserTable)
+	_, err := d.DB.Exec(query.CreateTokenTable)
 	if err != nil {
 		return err
 	}
-	_, err = d.DB.Exec(query.CreateTokenTable)
+	_, err = d.DB.Exec(query.CreateUserTable)
 	if err != nil {
 		return err
 	}
@@ -67,9 +71,18 @@ func (d *DataBase) GetUserByID(id uint32) (*entity.User, error) {
 	return user, nil
 }
 
+func (d *DataBase) GetUserPasswordByEmail(email string) (string, error) {
+	var passwd string
+	err := d.DB.QueryRow(query.GetUserPasswordByEmail, email).Scan(&passwd)
+	if err != nil {
+		return "", err
+	}
+	return passwd, nil
+}
+
 func (d *DataBase) AddUser(user *entity.User) (uint32, error) {
 	var id uint32
-	err := d.DB.QueryRow(query.AddUser, user.Name, user.Token, user.Email, user.Password).Scan(&id)
+	err := d.DB.QueryRow(query.AddUser, user.Name, user.RefreshToken, user.Email, user.Password).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
@@ -84,10 +97,22 @@ func (d *DataBase) DeleteUser(id uint32) error {
 	return nil
 }
 
+func (d *DataBase) CheckUserByEmail(email string) (bool, error) {
+	var b bool
+	err := d.DB.QueryRow(query.CheckUserByEmail, email).Scan(&b)
+	if err != nil {
+		return false, err
+	}
+	if b {
+		return true, nil
+	}
+	return false, nil
+}
+
 func (d *DataBase) GetPostByID(id uint32) (*entity.Post, error) {
 	row := d.DB.QueryRow(query.GetPostByID, id)
 	post := &entity.Post{}
-	err := row.Scan(&post.Id, &post.Owner, &post.URL, &post.Time, &post.Anons, &post.Data)
+	err := row.Scan(&post.Id, &post.Owner, &post.URL, &post.Title, &post.Time, &post.Anons, &post.Data)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return post, sql.ErrNoRows
@@ -106,11 +131,11 @@ func (d *DataBase) Get10Post(offset int) ([]*entity.Post, error) {
 	}
 	for rows.Next() {
 		p := &entity.Post{}
-		err := rows.Scan(&p.Id, &p.Owner, &p.URL, &p.Time, &p.Anons, &p.Data)
+		err := rows.Scan(&p.Id, &p.Owner, &p.URL, &p.Title, &p.Time, &p.Anons, &p.Data)
 		if err != nil {
 			return posts, err
 		}
-		posts := append(posts, p)
+		posts = append(posts, p)
 	}
 	return posts, nil
 }
@@ -123,11 +148,11 @@ func (d *DataBase) GetAllPost() ([]*entity.Post, error) {
 	}
 	for rows.Next() {
 		p := &entity.Post{}
-		err := rows.Scan(&p.Id, &p.Owner, &p.URL, &p.Time, &p.Anons, &p.Data)
+		err := rows.Scan(&p.Id, &p.Owner, &p.URL, &p.Title, &p.Time, &p.Anons, &p.Data)
 		if err != nil {
 			return posts, err
 		}
-		posts := append(posts, p)
+		posts = append(posts, p)
 	}
 	return posts, nil
 
@@ -142,7 +167,7 @@ func (d *DataBase) AddPost(post *entity.Post) (uint32, error) {
 	} else {
 		post.Anons = post.Data
 	}
-	err := d.DB.QueryRow(query.AddPost, post.Id, post.Owner, post.URL, post.Time, post.Anons, post.Data).Scan(&id)
+	err := d.DB.QueryRow(query.AddPost, post.Owner, post.URL, post.Title, post.Time, post.Anons, post.Data).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
@@ -238,5 +263,18 @@ func (d *DataBase) DeleteToken(token string) error {
 }
 
 func (d *DataBase) UpdateToken(token string, uid uint32) error {
+	t := time.Now().Add(24 * 30 * time.Hour).Unix()
+	_, err := d.DB.Exec(query.UpdateToken, token, t, uid)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
+func (d *DataBase) SetTokenUserID(token string, uid uint32) error {
+	_, err := d.DB.Exec(query.SetTokenUserID, uid, token)
+	if err != nil {
+		return err
+	}
+	return nil
 }

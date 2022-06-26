@@ -14,7 +14,7 @@ func DefaultPSQLConfig() *PSQLConfig {
 		Host:     "localhost",
 		Port:     "5432",
 		User:     "postgres",
-		Password: "",
+		Password: "qwerty",
 		DBName:   "testdb",
 		SSLMode:  "disable",
 	}
