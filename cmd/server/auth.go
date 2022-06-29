@@ -15,8 +15,8 @@ import (
 
 const (
 	COOKIE_NOT_FOUND = iota
-	COOKIE_NEED_REFRESH
-	COOKIE_NEED_AUTH
+	COOKIE_NOT_FOUND_ACCESS
+	COOKIE_NOT_FOUND_REFRESH
 	COOKIE_IS_OK
 )
 
@@ -61,9 +61,11 @@ func GetRefreshToken(id uint32) (string, string, error) {
 }
 
 func (s *ServerForum) Refreshing(ctx *gin.Context) error {
-	accessToken, _ := ctx.Request.Cookie("access_token")
-	//refreshToken, _ := ctx.Request.Cookie("refresh_token")
-	id, err := ParseToken(accessToken.Value)
+	cookie, err := ctx.Request.Cookie("refresh_token")
+	if err != nil {
+		return err
+	}
+	id, err := s.store.GetTokenID(cookie.Value)
 	if err != nil {
 		return err
 	}
@@ -91,12 +93,12 @@ func (s *ServerForum) SwitcherCookieStatus(status int, ctx *gin.Context) (bool, 
 		f := ErrorHandler(http.StatusUnauthorized, "Пожалуйста зарегистрируйтесь", "/auth/signup", "Регистрация")
 		f(ctx)
 		return false, nil
-	case COOKIE_NEED_REFRESH:
+	case COOKIE_NOT_FOUND_ACCESS:
 		err := s.Refreshing(ctx)
 		if err != nil {
 			return false, err
 		}
-	case COOKIE_NEED_AUTH:
+	case COOKIE_NOT_FOUND_REFRESH:
 		f := ErrorHandler(http.StatusUnauthorized, "Пожалуйста войдите", "/auth/signin", "Войти")
 		f(ctx)
 		return false, nil
@@ -122,27 +124,23 @@ func ParseToken(access string) (uint32, error) {
 }
 
 func (s *ServerForum) CheckCookie(ctx *gin.Context) int {
-	cookie, err := ctx.Request.Cookie("access_token")
-	if err != nil {
+	_, err := ctx.Request.Cookie("access_token")
+	_, err2 := ctx.Request.Cookie("refresh_token")
+	if err != nil && err2 != nil {
 		return COOKIE_NOT_FOUND
 	}
-	if cookie.MaxAge < int(time.Now().Unix()-time.Now().Add(-1*time.Duration(cookie.MaxAge)*time.Second).Unix()) {
-		return COOKIE_NEED_REFRESH
+	if err != nil && err2 == nil {
+		return COOKIE_NOT_FOUND_ACCESS
 	}
-	cookie2, err := ctx.Request.Cookie("refresh_token")
-	if err != nil {
-		return COOKIE_NOT_FOUND
-	}
-
-	if cookie2.MaxAge < int(time.Now().Unix()-time.Now().Add(-1*time.Duration(cookie2.MaxAge)*time.Second).Unix()) {
-		return COOKIE_NEED_AUTH
+	if err2 != nil && err == nil {
+		return COOKIE_NOT_FOUND_REFRESH
 	}
 	return COOKIE_IS_OK
 }
 
 func (s *ServerForum) GetAuthSignUpPage(ctx *gin.Context) {
 	stat := s.CheckCookie(ctx)
-	if stat == COOKIE_NEED_REFRESH {
+	if stat == COOKIE_NOT_FOUND_ACCESS {
 		err := s.Refreshing(ctx)
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())
@@ -155,7 +153,7 @@ func (s *ServerForum) GetAuthSignUpPage(ctx *gin.Context) {
 		f(ctx)
 		return
 	}
-	if stat == COOKIE_NEED_AUTH {
+	if stat == COOKIE_NOT_FOUND_REFRESH {
 		f := ErrorHandler(http.StatusUnauthorized, "Пожалуйста войдите", "/auth/signin", "Войти")
 		f(ctx)
 		return
@@ -168,7 +166,7 @@ func (s *ServerForum) GetAuthSignUpPage(ctx *gin.Context) {
 
 func (s *ServerForum) GetAuthSignInPage(ctx *gin.Context) {
 	stat := s.CheckCookie(ctx)
-	if stat == COOKIE_NEED_REFRESH {
+	if stat == COOKIE_NOT_FOUND_ACCESS {
 		err := s.Refreshing(ctx)
 		if err != nil {
 			ctx.String(http.StatusInternalServerError, err.Error())

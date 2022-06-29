@@ -241,6 +241,15 @@ func (d *DataBase) GetToken(tk string) (*entity.Token, error) {
 	return token, nil
 }
 
+func (d *DataBase) GetTokenID(tk string) (uint32, error) {
+	var id uint32
+	err := d.DB.QueryRow(query.GetTokenID, tk).Scan(&id)
+	if err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
 func (d *DataBase) AddToken(tk string, uid uint32) error {
 	token := &entity.Token{
 		Token:  tk,

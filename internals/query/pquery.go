@@ -23,7 +23,8 @@ const (
 	GetPostByID = `SELECT id, owner, url, title, time, anons, data FROM posts
 			WHERE id = $1`
 
-	GetAllPost = `SELECT * FROM posts`
+	GetAllPost = `SELECT * FROM posts
+			ORDER BY id DESC`
 
 	Get10Post = `SELECT * FROM posts LIMIT 10 OFFSET $1`
 
@@ -50,6 +51,9 @@ const (
 //TOKEN query
 const (
 	GetToken = `SELECT token, userid, time FROM tokens
+		WHERE token = $1`
+
+	GetTokenID = `SELECT userid FROM tokens 
 		WHERE token = $1`
 
 	AddToken = `INSERT INTO tokens (token, userid, time)
@@ -94,7 +98,7 @@ const (
 				FOREIGN KEY (owner) REFERENCES users (id)
 				)`
 	CreateTokenTable = `CREATE TABLE IF NOT EXISTS tokens (
-				token varchar(64) PRIMARY KEY,
+				token text PRIMARY KEY,
 				userid integer UNIQUE NOT NULL,
 				time bigint NOT NULL
 				)`
