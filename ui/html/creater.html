@@ -1,0 +1,15 @@
+{{ define "creater" }}
+{{ template "header" }}
+<main role="main" class="conteiner">
+  <h1 class="mb-0">Форма создания треда</h1>  
+  <form action="/save_post/" method="post">
+  <input type="text" name="title" id="title" minlength=1 maxlength=256 placeholder="Введите название треда"
+  class="form-control"><br>
+  <textarea name="data" id="data" class="form-control" minlength=8 placeholder="Введите текст треда">
+  </textarea>
+  <button class="btn btn-warning">Добавить</button>
+  </form>
+</main>
+
+{{ template "footer" }}
+{{ end }}

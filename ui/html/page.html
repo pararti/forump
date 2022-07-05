@@ -1,0 +1,21 @@
+{{ define "page" }}
+{{ template "header" }}
+
+<main class="container">
+  <div class="col-md-8">
+
+      <h3>
+   
+      </h3>
+
+      <article class="blog-post datapost">
+        <h2 class="blog-post-title mb-1">{{ .Title }}</h2>
+        <hr color=#00cc00 size=3px>
+        <p class="blog-post-meta">{{ .Time }} <a href="#">{{ .Owner }}</a></p>
+        {{ .Data }}
+
+        </article>
+  </div>
+</main>
+{{ template "footer" }}
+{{ end }}
