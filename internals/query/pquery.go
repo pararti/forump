@@ -72,7 +72,7 @@ const (
 	CreateUserTable = `CREATE TABLE IF NOT EXISTS users (
 				id serial PRIMARY KEY,
 				name varchar(40) NOT NULL,
-				token varchar(64),
+				token text,
 				email varchar(254) UNIQUE NOT NULL,
 				password varchar(256) NOT NULL,
 				FOREIGN KEY (token) REFERENCES tokens (token) ON UPDATE CASCADE
